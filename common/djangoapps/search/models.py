@@ -5,12 +5,14 @@ Models for representation of search results
 import json
 import string
 import re
+import logging
 from collections import Counter
 
 import search.sorting
 from xmodule.modulestore import Location
 
 import nltk
+log = logging.getLogger("edx.search")
 
 
 class SearchResults:
@@ -82,9 +84,10 @@ class SearchResult:
 
     def __init__(self, entry, score, query):
         self.data = entry
+        self.category = json.loads(entry["id"])["category"]
         self.url = _return_jump_to_url(entry)
         self.score = score
-        self.thumbnail = "data:image/jpg;base64," + entry["thumbnail"]
+        self.thumbnail = entry["thumbnail"]
         self.snippets = _snippet_generator(self.data["searchable_text"], query)
 
 

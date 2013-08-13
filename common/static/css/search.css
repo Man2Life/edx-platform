@@ -109,8 +109,7 @@ a.search-bar{
     border-radius: 2px;
     display: block;
     padding: 0;
-    margin-top: 30px;
-    margin-left: 20px;
+    margin: 3% 0 2.5% 1.5%;
 }
 
 .menu{
@@ -159,4 +158,8 @@ li:hover{
     background: #eeeeee;
     border-radius: 2px;
     margin-right: 5px;
+}
+
+.no-results{
+    padding-top: 8%;
 }
