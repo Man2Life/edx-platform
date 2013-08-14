@@ -29,7 +29,7 @@ class SearchResults:
         raw_results = json.loads(response.content).get("hits", {"hits": ""})["hits"]
         print raw_results
         scores = [entry["_score"] for entry in raw_results]
-        self.sort = kwargs.get("sort", None)
+        self.sort = kwargs.get("sort", "relevance")
         raw_data = [entry["_source"] for entry in raw_results]
         self.query = " ".join(kwargs.get("s", "*.*"))
         results = zip(raw_data, scores)
@@ -87,8 +87,27 @@ class SearchResult:
         self.category = json.loads(entry["id"])["category"]
         self.url = _return_jump_to_url(entry)
         self.score = score
-        self.thumbnail = entry["thumbnail"]
+        if entry["thumbnail"].startswith("/static/"):
+            self.thumbnail = _get_content_url(self.data, entry["thumbnail"])
+        else:
+            self.thumbnail = entry["thumbnail"]
         self.snippets = _snippet_generator(self.data["searchable_text"], query)
+
+
+def _get_content_url(data, static_url):
+    """
+    Generates a real content url for problems specified with static urls
+
+    Nobody seems to know how this works, but this hack works for everything I can find.
+    """
+
+    base_url = "/c4x/%s/%s/asset" % (json.loads(data["id"])["org"], json.loads(data["id"])["course"])
+    addendum = static_url.replace("/static/", "")
+    addendum.replace("/", "_")
+    current = "/".join([base_url, addendum])
+    substring = current[current.find("images/"):].replace("/", "_")
+    substring = current[:current.find("images/")] + substring
+    return substring
 
 
 def _snippet_generator(transcript, query, soft_max=50, word_margin=25, bold=True):

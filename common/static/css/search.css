@@ -51,14 +51,16 @@
 
 .video-image:before{
     content: url("/static/images/sequence-nav/video-icon-current.png");
+    float:left;
+    padding-left: 10px;
+    padding-right: 5px;
 }
 
 .problem-image:before{
-    content: url("/static/images/sequence-nav/list-icon-normal.png")
-}
-
-.pdf-image:before{
-    content: url("/static/images/sequence-nav/document-icon-current.png");
+    content: url("/static/images/sequence-nav/list-icon-normal.png");
+    float:left;
+    padding-left: 10px;
+    padding-right: 5px;
 }
 
 .search-container{
@@ -162,4 +164,9 @@ li:hover{
 
 .no-results{
     padding-top: 8%;
+}
+
+.context{
+    text-align: center;
+    color: #9f9f9f;
 }

@@ -89,11 +89,13 @@ def _find(request, course_id, test_url=None):
     context = {}
     response = requests.get(base_url, data=json.dumps(full_query_data))
     log.debug(response.content)
-    data = SearchResults(response, **request.GET)
-    data.filter_and_sort()
-    context.update({"results": len(data.entries) > 0})
+    results = SearchResults(response, **request.GET)
+    results.filter_and_sort()
+    course = course_id.split("/")[1]
+    context.update({"results": len(results.entries) > 0})
     context.update({
-        "data": data,
-        "old_query": query
+        "data": results,
+        "old_query": query,
+        "course_id": course
     })
     return context
