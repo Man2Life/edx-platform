@@ -146,3 +146,12 @@ class ExtraPanelTabTestCase(TestCase):
                 self.assertFalse(changed)
                 self.assertEqual(actual_tabs, expected_tabs)
 
+
+class CourseImageTestCase(TestCase):
+    """Tests for course image URLs."""
+
+    def test_get_image_url(self):
+        """Test image URL formatting."""
+        course = CourseFactory.create(org='edX', course='999')
+        url = utils.course_image_url(course)
+        self.assertEquals(url, '/c4x/edX/999/asset/{0}'.format(course.course_image))

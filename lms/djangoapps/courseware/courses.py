@@ -85,7 +85,7 @@ def course_image_url(course):
     if isinstance(modulestore(), XMLModuleStore):
         return '/static/' + course.data_dir + "/images/course_image.jpg"
     else:
-        loc = course.location._replace(tag='c4x', category='asset', name='images_course_image.jpg')
+        loc = course.location._replace(tag='c4x', category='asset', name=course.course_image)
         path = StaticContent.get_url_path_from_location(loc)
         return path
 
