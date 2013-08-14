@@ -104,10 +104,9 @@ MITX_FEATURES['SAUCE'] = {
     'BROWSER' : DESIRED_CAPABILITIES.get(os.environ.get('SAUCE_BROWSER', 'chrome')),
     'PLATFORM' : os.environ.get('SAUCE_PLATFORM'),
     'VERSION' : os.environ.get('SAUCE_VERSION'),
-    'DEVICE' : os.environ.get('SAUCE_DEVICE'),
+    'DEVICE' : os.environ.get('SAUCE_DEVICE', ''),
     'SESSION' : 'Jenkins Acceptance Tests',
     'BUILD' : os.environ.get('JOB_NAME'),
-    'CUSTOM_TAGS' : {}
 }
 
 # Include the lettuce app for acceptance testing, including the 'harvest' django-admin command

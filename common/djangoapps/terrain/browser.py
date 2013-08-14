@@ -62,7 +62,6 @@ desired_capabilities['version'] = SAUCE.get('VERSION', '')
 desired_capabilities['device-type'] = SAUCE.get('DEVICE', '')
 desired_capabilities['name'] = SAUCE.get('SESSION', 'Lettuce Tests')
 desired_capabilities['build'] = SAUCE.get('BUILD', 'edX Plaform')
-desired_capabilities['custom-data'] = SAUCE.get('CUSTOM_TAGS', '')
 desired_capabilities['video-upload-on-pass'] = False
 desired_capabilities['sauce-advisor'] = False
 desired_capabilities['record-screenshots'] = False
