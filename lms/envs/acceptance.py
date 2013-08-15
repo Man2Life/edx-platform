@@ -20,6 +20,7 @@ logging.disable(logging.ERROR)
 import os
 from random import choice
 
+
 def seed():
     return os.getppid()
 
