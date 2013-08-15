@@ -170,3 +170,28 @@ li:hover{
     text-align: center;
     color: #9f9f9f;
 }
+
+.jPag-pages li a{
+    border-radius: 2px;
+}
+
+.jPag-first{
+    border-radius: 2px;
+}
+
+.jPag-last{
+    border-radius: 2px;
+}
+
+.pagination-stub{
+    text-align:center;
+}
+
+.jPaginate div{
+    margin-left: 200px;
+}
+
+.search-context{
+    color: #d0d0d0;
+    text-align:center;
+}

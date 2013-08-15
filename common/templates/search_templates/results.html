@@ -24,7 +24,7 @@
             <li class="header-bar">
                 <span class="filter-item"></span>
                 Courseware
-                <span class="count">${ len(data.entries) }</span>
+                <span class="count _currentFilter">${ len(data.entries) }</span>
                 </span>
             </li>
             <li class="body-bar">
@@ -45,10 +45,11 @@
         </div>
         % if len(data.entries) > 0:
             <div class="search-container">
-            <p class="context">
-                Showing ${len(data.entries)} results in courseware for ${course_id}
-            </p>
-        	% for datum in data.entries:
+                <p class="search-context">
+                    Showing ${len(data.entries)} results in courseware for ${course_id}
+                </p>
+                <p class="pagination-stub" style="text-align:center;">test</p>
+        	% for datum in data.entries[result_start:result_end]:
             <section>
             	<a href=${datum.url}>
             		<div class="result-container">
@@ -61,15 +62,19 @@
             				<h1 class="result-title">${datum.data['display_name']}</h1>
                         </div>
             			<div class="result-body">
-                            <div class="thumbnail-wrapper">
-            				    <div class="result-thumbnail">
-                                % if datum.category == "problem":
-                                    <img class="thumbnail" src='${static.url(datum.thumbnail)}' alt="${datum.data['display_name']}"></img>
-                                % else: 
-            					   <img class="thumbnail" src="${datum.thumbnail}" alt="${datum.data['display_name']}"></img>
-                                % endif
-            				    </div>
-                            </div>
+                                <div class="thumbnail-wrapper">
+                				    <div class="result-thumbnail">
+                                    % if datum.thumbnail:
+                                        % if datum.category == "problem":
+                                            <img class="thumbnail" src='${static.url(datum.thumbnail)}' alt="${datum.data['display_name']}">
+                                        % else: 
+                    					   <img class="thumbnail" src="${datum.thumbnail}" alt="${datum.data['display_name']}">
+                                        % endif
+                                    % else:
+                                        <img class="thumbnail">
+                                    % endif
+                				    </div>
+                                </div>
                             <div class="result-snippets">
             					<div class="snippet">
             						${datum.snippets}

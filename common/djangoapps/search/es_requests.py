@@ -6,6 +6,7 @@ import os
 import re
 import hashlib
 import logging
+from itertools import chain
 
 import json
 import requests
@@ -17,23 +18,17 @@ log = logging.getLogger("edx.search")
 MONGO_COURSE_CACHE = {}
 
 
-def flaky_request(method, url, **kwargs):
+def flaky_request(method, url, attempts=2, **kwargs):
     """
     General exception handling for requests
     """
-    request = getattr(requests, method)
-    response = None
-    attempts = kwargs.get("attempts", 2)
+
     for _ in range(attempts):
         try:
-            response = request(url, **kwargs)
-            break
+            return requests.request(method, url, **kwargs)
         except RequestException:
             pass
-    if response is None:
-        return None
-    else:
-        return response
+    raise EmptyFieldException
 
 
 class EmptyFieldException(Exception):
@@ -112,14 +107,6 @@ class ElasticDatabase:
         url = self.url + "/_bulk"
         return flaky_request("post", url, data=all_data)
 
-    def delete_index(self, index):
-        """
-        Deletes the index specified, along with all contained types and data
-        """
-
-        full_url = "/".join([self.url, index])
-        return flaky_request("delete", full_url)
-
 
 class MongoIndexer:
     """
@@ -127,15 +114,21 @@ class MongoIndexer:
     """
 
     def __init__(
-        self, host, port, content_database='xcontent', module_database='xmodule', es_instance=ElasticDatabase()
+        self, host, port, content_database='xcontent', module_database='xmodule',
+        edge_content_database='edge-xcontent', edge_module_database='edge-xmodule',
+        es_instance=ElasticDatabase()
     ):
         self.host = host
         self.port = port
         client = MongoClient(host, port)
         content_db = client[content_database]
         module_db = client[module_database]
+        edge_content_db = client[edge_content_database]
+        edge_module_db = client[edge_module_database]
         self._chunk_collection = content_db["fs.chunks"]
         self._module_collection = module_db["modulestore"]
+        self._edge_chunk_collection = edge_content_db["fs.chunks"]
+        self._edge_module_collection = edge_module_db["modulestore"]
         self._es_instance = es_instance
 
     def _get_bulk_index_item(self, index, data):
@@ -145,6 +138,7 @@ class MongoIndexer:
 
         return_string = ""
         return_string += json.dumps({"index": {"_index": index, "_type": data["type_hash"], "_id": data["hash"]}})
+        log.debug(return_string)
         return_string += "\n"
         return_string += json.dumps(data)
         return_string += "\n"
@@ -155,6 +149,9 @@ class MongoIndexer:
         Given a mongo_module, returns the name for the course element it belongs to
         """
         course_element = self._module_collection.find_one({
+            "_id.course": mongo_module["_id"]["course"],
+            "_id.category": "course"
+        }) or self._edge_module_collection.find_one({
             "_id.course": mongo_module["_id"]["course"],
             "_id.category": "course"
         })
@@ -259,7 +256,8 @@ class MongoIndexer:
             name_pattern = re.compile(".*" + uuid + ".*")
         else:
             raise EmptyFieldException
-        chunk = self._chunk_collection.find_one({"files_id.name": name_pattern})
+        chunk = (self._chunk_collection.find_one({"files_id.name": name_pattern}) or
+            self._edge_chunk_collection.find_one({"files_id.name": name_pattern}))
         if chunk is None:
             raise EmptyFieldException
         else:
@@ -311,12 +309,12 @@ class MongoIndexer:
         id_ = json.dumps(mongo_module["_id"])
         org = mongo_module["_id"]["org"]
         course = mongo_module["_id"]["course"]
-
         if not MONGO_COURSE_CACHE.get(course, False):
             MONGO_COURSE_CACHE[course] = self._get_course_name_from_mongo_module(mongo_module)
         run = MONGO_COURSE_CACHE[course]
 
         course_id = "/".join([org, course, run])
+        log.debug(course_id)
         item_hash = hashlib.sha1(id_).hexdigest()
         display_name = (
             mongo_module.get("metadata", {}).get("display_name", "") +
@@ -340,9 +338,11 @@ class MongoIndexer:
         Returns a cursor matching all modules in the given course
         """
 
-        return self._module_collection.find({"_id.course": course}, timeout=False)
+        main_cursor = self._module_collection.find({"_id.course": course}, timeout=False)
+        edge_cursor = self._edge_module_collection.find({"_id.course": course}, timeout=False)
+        return (entry for entry in chain(main_cursor, edge_cursor))
 
-    def index_course(self, course, chunk_size=2):
+    def index_course(self, course, chunk_size=10):
         """
         Indexes all of the searchable content for a course
         """
@@ -350,8 +350,8 @@ class MongoIndexer:
         cursor = self._find_modules_for_course(course)
         counter = 0
         index_string = ""
-        for _ in range(cursor.count()):
-            item = cursor.next()
+        for item in cursor:
+            counter += 1
             category = item["_id"]["category"].lower().strip()
             data = {}
             index = ""
@@ -368,6 +368,7 @@ class MongoIndexer:
                 continue
             index_string += self._get_bulk_index_item(index, data)
             if counter % chunk_size and counter > 1:
-                if self._es_instance._get_bulk_index(index_string).status_code == 400:
+                index_status_code = self._es_instance.bulk_index(index_string).status_code
+                if index_status_code == 400:
                     log.error("The following bulk index failed: %s" % index_string)
                 index_string = ""

@@ -138,20 +138,43 @@ function updateOldSearch(){
 }
 
 function paginate(element){
+    var currentResults = parseInt($("._currentFilter").text(), 10);
+    var pages = Math.ceil(currentResults/10.0);
+    var startPage = 1;
+    if (document.location.href.match(/page=\d+/)){
+        startPage = document.location.href.match(/page=(\d+)/)[1];
+    }
     $(element).paginate({
-        count       : 100,
-        start       : 1,
-        display     : 8,
+        count       : pages,
+        start       : startPage,
+        display     : 5,
         border                  : true,
-        border_color            : '#fff',
-        text_color              : '#fff',
-        background_color        : 'black',
+        border_color            : '#999',
+        text_color              : '#999',
+        background_color        : '#bbb',
         border_hover_color      : '#ccc',
-        text_hover_color        : '#000',
+        text_hover_color        : '#999',
         background_hover_color  : '#fff',
         images                  : false,
-        mouse                   : 'press'
+        mouse                   : 'press',
+        onChange                : function(page){
+            $("ul.jPag-pages").width($("ul.jPag-pages").width()+1);
+            var newUrl = document.location.href;
+            if (document.location.href.match(/page=\d+/)){
+                newUrl = document.location.href.replace(/page=\d+/, "page=" + $(".jPag-current").text());
+            } else {
+                newUrl += "&page=" + $(".jPag-current").text();
+            }
+            console.log(newUrl);
+            window.location.href = newUrl;
+        }
     });
+    var currentLeft = parseInt($("div.jPag-control-front").css("left"),10);
+    var adjustment = parseInt($("div.jPag-control-back").css("margin-left"), 10);
+    var currentWidth = parseInt($("p.jPaginate div:not([class])").css("width"), 10);
+    $("p.jPaginate div:not([class])").css("width", currentWidth-adjustment);
+    $("div.jPag-control-front").css("left", currentLeft-adjustment);
+    $("ul.jPag-pages").width($("ul.jPag-pages").width()+1);
 }
 
 $(document).ready(function(){
@@ -160,6 +183,8 @@ $(document).ready(function(){
     } else {
         $("a.search-bar").bind("click", replaceWithSearch);
     }
-    paginate($("p.context").eq(0));
+    if ($("p.pagination-stub").length > 0) {
+        paginate($("p.pagination-stub").eq(0));
+    }
 });
 
