@@ -22,16 +22,17 @@ log = logging.getLogger("edx.search")
 
 
 @ensure_csrf_cookie
-def search(request, course_id, page=None):
+def search(request, course_id):
     """
     Returns search results within course_id from request.
 
     Request should contain the query string in the "s" parameter.
     """
-    if page is None:
-        page = int(request.GET.get("page", 1))
+
+    page = int(request.GET.get("page", 1))
+    filter = request.GET.get("filter", "all")
     course = get_course_with_access(request.user, course_id, 'load')
-    context = _find(request, course_id, page)
+    context = _find(request, course_id, page, filter)
     context.update({"course": course})
     return render_to_response("search_templates/results.html", context)
 
@@ -53,7 +54,7 @@ def index_course(request):
         return HttpResponseBadRequest()
 
 
-def _find(request, course_id, page=1, test_url=None):
+def _find(request, course_id, page=1, filter="all", test_url=None):
     """
     Method in charge of getting search results and associated metadata
     """
@@ -85,12 +86,13 @@ def _find(request, course_id, page=1, test_url=None):
     context = {}
     response = requests.get(base_url, data=json.dumps(full_query_data))
     results = SearchResults(response, **request.GET)
-    results.filter_and_sort()
+    results.sort_results()
     course = course_id.split("/")[1]
     context.update({"results": len(results.entries) > 0})
     context.update({
-        "result_start": (page-1)*10,
-        "result_end": page*10,
+        "result_start": (page - 1) * 10,
+        "result_end": page * 10,
+        "filter": filter,
         "data": results,
         "old_query": query,
         "course_id": course

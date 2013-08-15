@@ -98,6 +98,7 @@ def setup_index(url, index, settings):
     full_url = "/".join([url, index]) + "/"
     return flaky_request("put", full_url, data=json.dumps(settings))
 
+
 def delete_index(url, index):
     """
     Deletes the index specified, along with all contained types and data

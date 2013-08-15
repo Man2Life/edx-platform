@@ -138,7 +138,7 @@ function updateOldSearch(){
 }
 
 function paginate(element){
-    var currentResults = parseInt($("._currentFilter").text(), 10);
+    var currentResults = parseInt($("._currentFilter span.count").text(), 10);
     var pages = Math.ceil(currentResults/10.0);
     var startPage = 1;
     if (document.location.href.match(/page=\d+/)){
@@ -151,40 +151,70 @@ function paginate(element){
         border                  : true,
         border_color            : '#999',
         text_color              : '#999',
-        background_color        : '#bbb',
+        background_color        : '#eee',
         border_hover_color      : '#ccc',
         text_hover_color        : '#999',
         background_hover_color  : '#fff',
         images                  : false,
         mouse                   : 'press',
         onChange                : function(page){
-            $("ul.jPag-pages").width($("ul.jPag-pages").width()+1);
-            var newUrl = document.location.href;
+            var newPage = $(".jPag-current").text();
             if (document.location.href.match(/page=\d+/)){
-                newUrl = document.location.href.replace(/page=\d+/, "page=" + $(".jPag-current").text());
+                window.location.href = document.location.href.replace(/page=\d+/, "page=" + newPage);
             } else {
-                newUrl += "&page=" + $(".jPag-current").text();
+                window.location.href = document.location.href + "&page=" + newPage;
             }
-            console.log(newUrl);
-            window.location.href = newUrl;
         }
     });
-    var currentLeft = parseInt($("div.jPag-control-front").css("left"),10);
-    var adjustment = parseInt($("div.jPag-control-back").css("margin-left"), 10);
-    var currentWidth = parseInt($("p.jPaginate div:not([class])").css("width"), 10);
-    $("p.jPaginate div:not([class])").css("width", currentWidth-adjustment);
-    $("div.jPag-control-front").css("left", currentLeft-adjustment);
+    var lastButton = $("div.jPag-control-front");
+    var selectorDiv = $("p.jPaginate div:not([class])");
+    var currentLeft = parseInt(lastButton.css("left"),10);
+    var adjustment = parseInt(selectorDiv.css("margin-left"), 10);
+    var currentWidth = parseInt(selectorDiv.css("width"), 10);
+    selectorDiv.css("width", currentWidth-adjustment);
+    lastButton.css("left", currentLeft-adjustment);
     $("ul.jPag-pages").width($("ul.jPag-pages").width()+1);
 }
 
+function moveFilterClasses(){
+    $("._currentFilter").removeClass("_currentFilter");
+    if (document.location.href.match(/filter=\w+/)){
+        var currentFilter = document.location.href.match(/filter=(\w+)/)[1];
+        var newFilter = $("#"+currentFilter);
+        newFilter.addClass("_currentFilter");
+    }
+    else {
+        $("#all").addClass("_currentFilter");
+    }
+}
+
+function changeFilter(){
+    var newFilter = $(this).attr("id");
+    var newUrl = "";
+    if (document.location.href.match(/filter=\w+/)){
+        newUrl = document.location.href.replace(/filter=\w+/, "filter=" + newFilter);
+    } else {
+        newUrl = document.location.href + "&filter=" + newFilter;
+    }
+    if (newUrl.match(/page=\d+/)){
+        window.location.href = newUrl.replace(/page=\d+/, "page=1");
+    } else {
+        window.location.href = newUrl + "&page=1";
+    }
+}
+
 $(document).ready(function(){
+    moveFilterClasses();
     if (document.URL.indexOf("search?s=") !== -1){
         updateOldSearch();
     } else {
         $("a.search-bar").bind("click", replaceWithSearch);
     }
+
     if ($("p.pagination-stub").length > 0) {
         paginate($("p.pagination-stub").eq(0));
     }
+
+    $("ul.menu li").bind("click", changeFilter);
 });
 

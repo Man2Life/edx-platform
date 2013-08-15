@@ -21,24 +21,24 @@
     <div class="search-results">
         <div id="menu-container">
             <ul class="menu">
-            <li class="header-bar">
+            <li id="all" class="header-bar">
                 <span class="filter-item"></span>
                 Courseware
-                <span class="count _currentFilter">${ len(data.entries) }</span>
+                <span class="count">${ len(data.entries) }</span>
                 </span>
             </li>
-            <li class="body-bar">
+            <li id="video" class="body-bar">
                 <span class="filter-item">
                 <span class="video-image"></span>
                 Transcripts
-                <span class="count">${ len([entry for entry in data.entries if entry.category == "video"])}</span>
+                <span class="count">${ len(data.get_category("video"))}</span>
                 </span>
             </li>
-            <li class="body-bar">
+            <li id="problem" class="body-bar">
                 <span class="filter-item">
                 <span class="problem-image"></span>
                 Problems
-                <span class="count">${ len([entry for entry in data.entries if entry.category == "problem"])}</span>
+                <span class="count">${ len(data.get_category("problem"))}</span>
                 </span>
             </li>
             </ul>
@@ -48,8 +48,8 @@
                 <p class="search-context">
                     Showing ${len(data.entries)} results in courseware for ${course_id}
                 </p>
-                <p class="pagination-stub" style="text-align:center;">test</p>
-        	% for datum in data.entries[result_start:result_end]:
+                <p class="pagination-stub" style="text-align:center;"></p>
+        	% for datum in data.get_category(filter)[result_start:result_end]:
             <section>
             	<a href=${datum.url}>
             		<div class="result-container">

@@ -151,6 +151,10 @@ li:hover{
     background: #ffffff;
 }
 
+._currentFilter{
+    background: #ffffff;
+}
+
 .count{
     float:right;
     padding: 1px 5px;
