@@ -9,6 +9,7 @@ so that we can run the lettuce acceptance tests on SauceLabs.
 
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import os
+import json
 
 PORTS = [2000, 2001, 2020, 2109, 2222, 2310, 3000, 3001,
         3030, 3210, 3333, 4000, 4001, 4040, 4321, 4502, 4503, 5000, 5001,
@@ -27,16 +28,19 @@ DESIRED_CAPABILITIES = {
     'android': DesiredCapabilities.ANDROID
 }
 
+DEFAULT_CONFIG='{"PLATFORM":"Linux", "BROWSER":"chrome", "VERISON":"", "DEVICE":""}'
+
+SAUCE_INFO = json.loads(os.environ.get('SAUCE_INFO', DEFAULT_CONFIG))
 
 # Information needed to utilize Sauce Labs.
 SAUCE = {
     'SAUCE_ENABLED': os.environ.get('SAUCE_ENABLED'),
     'USERNAME': os.environ.get('SAUCE_USER_NAME'),
     'ACCESS_ID': os.environ.get('SAUCE_API_KEY'),
-    'BROWSER': DESIRED_CAPABILITIES.get(os.environ.get('SAUCE_BROWSER', 'chrome').lower(), DesiredCapabilities.CHROME),
-    'PLATFORM': os.environ.get('SAUCE_PLATFORM', 'Linux'),
-    'VERSION': os.environ.get('SAUCE_VERSION', ''),
-    'DEVICE': os.environ.get('SAUCE_DEVICE', ''),
+    'BROWSER': DESIRED_CAPABILITIES.get(SAUCE_INFO.get('BROWSER', 'chrome').lower(), DesiredCapabilities.CHROME),
+    'PLATFORM': SAUCE_INFO.get('PLATFORM', 'Linux'),
+    'VERSION': SAUCE_INFO.get('VERSION', ''),
+    'DEVICE': SAUCE_INFO.get('DEVICE', ''),
     'SESSION': 'Jenkins Acceptance Tests',
     'BUILD': os.environ.get('JOB_NAME', 'LETTUCE TESTS'),
 }
