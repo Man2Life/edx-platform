@@ -8,6 +8,9 @@ from common import type_in_codemirror, open_new_course
 from course_import import import_file, go_to_import
 from selenium.webdriver.common.keys import Keys
 
+def _(s):
+    return s
+
 DISPLAY_NAME = "Display Name"
 MAXIMUM_ATTEMPTS = "Maximum Attempts"
 PROBLEM_WEIGHT = "Problem Weight"
@@ -21,7 +24,7 @@ def i_created_blank_common_problem(step):
     world.create_component_instance(
         step=step,
         category='problem',
-        component_type='Blank Common Problem'
+        component_type=_('Blank Common Problem')
     )
 
 
@@ -34,7 +37,7 @@ def i_edit_and_select_settings(_step):
 def i_see_advanced_settings_with_values(step):
     world.verify_all_setting_entries(
         [
-            [DISPLAY_NAME, "Blank Common Problem", True],
+            [DISPLAY_NAME, _("Blank Common Problem"), True],
             [MAXIMUM_ATTEMPTS, "", False],
             [PROBLEM_WEIGHT, "", False],
             [RANDOMIZATION, "Never", False],

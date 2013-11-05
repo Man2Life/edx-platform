@@ -1,6 +1,6 @@
 ---
 metadata:
-    display_name: E-text Written in LaTeX
+    display_name: Документ, написанный в LaTeX
     source_code: |
         \subsection{Example of E-text in LaTeX}
 
@@ -14,8 +14,8 @@ metadata:
 
 data: |
     <html>
-        <h2>Example: E-text page</h2>
+        <h2>Пример документа</h2>
         <p>
-          It is very convenient to write complex equations in LaTeX.
+          Это очень удобно записывать сложные формулы в LaTeX.
         </p>
     </html>
