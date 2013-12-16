@@ -15,7 +15,7 @@ from requests.status_codes import codes
 from StringIO import StringIO
 
 from django.conf import settings
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import User
 from django.http import HttpResponse
 from django_future.csrf import ensure_csrf_cookie
 from django.views.decorators.cache import cache_control
@@ -32,9 +32,9 @@ from xmodule.html_module import HtmlDescriptor
 
 from bulk_email.models import CourseEmail, CourseAuthorization
 from courseware import grades
-from courseware.access import (has_access, get_access_group_name,
-                               course_beta_test_group_name)
+from courseware.access import has_access
 from courseware.courses import get_course_with_access, get_cms_course_link
+from courseware.roles import CourseStaffRole, CourseInstructorRole, CourseBetaTesterRole
 from courseware.models import StudentModule
 from django_comment_common.models import (Role,
                                           FORUM_ROLE_ADMINISTRATOR,
@@ -50,12 +50,11 @@ from instructor_task.api import (get_running_instructor_tasks,
                                  submit_reset_problem_attempts_for_all_students,
                                  submit_bulk_course_email)
 from instructor_task.views import get_task_completion_info
-from mitxmako.shortcuts import render_to_response
+from mitxmako.shortcuts import render_to_response, render_to_string
 from psychometrics import psychoanalyze
 from student.models import CourseEnrollment, CourseEnrollmentAllowed, unique_id_for_user
 from student.views import course_from_id
 import track.views
-from mitxmako.shortcuts import render_to_string
 from xblock.field_data import DictFieldData
 from xblock.fields import ScopeIds
 from django.utils.translation import ugettext as _u
@@ -68,6 +67,9 @@ log = logging.getLogger(__name__)
 # internal commands for managing forum roles:
 FORUM_ROLE_ADD = 'add'
 FORUM_ROLE_REMOVE = 'remove'
+
+# For determining if a shibboleth course
+SHIBBOLETH_DOMAIN_PREFIX = 'shib:'
 
 
 def split_by_comma_and_whitespace(a_str):
@@ -139,35 +141,6 @@ def instructor_dashboard(request, course_id):
             encoded_row = [unicode(s).encode('utf-8') for s in datarow]
             writer.writerow(encoded_row)
         return response
-
-    def get_staff_group(course):
-        """Get or create the staff access group"""
-        return get_group(course, 'staff')
-
-    def get_instructor_group(course):
-        """Get or create the instructor access group"""
-        return get_group(course, 'instructor')
-
-    def get_group(course, groupname):
-        """Get or create an access group"""
-        grpname = get_access_group_name(course, groupname)
-        try:
-            group = Group.objects.get(name=grpname)
-        except Group.DoesNotExist:
-            group = Group(name=grpname)     # create the group
-            group.save()
-        return group
-
-    def get_beta_group(course):
-        """
-        Get the group for beta testers of course.
-        """
-        # Not using get_group because there is no access control action called
-        # 'beta', so adding it to get_access_group_name doesn't really make
-        # sense.
-        name = course_beta_test_group_name(course.location)
-        (group, _) = Group.objects.get_or_create(name=name)
-        return group
 
     def get_module_url(urlname):
         """
@@ -413,8 +386,8 @@ def instructor_dashboard(request, course_id):
                 except Exception as err:
                     msg += '<font color="red">' + _u('Failed to create a background task for rescoring "{key}": {id}.').format(key = module_state_key, id = err.message) + '</font>'
                     log.exception("Encountered exception from rescore: student '{0}' problem '{1}'".format(
-                            unique_student_identifier, module_state_key
-                        )
+                        unique_student_identifier, module_state_key
+                    )
                     )
 
     elif "Get link to student's progress page" in action:
@@ -478,7 +451,7 @@ def instructor_dashboard(request, course_id):
                     try:
                         ddata.append([x.email, x.grades[aidx]])
                     except IndexError:
-                        log.debug('No grade for assignment %s (%s) for student %s'  % (aidx, aname, x.email))
+                        log.debug('No grade for assignment %s (%s) for student %s', aidx, aname, x.email)
                 datatable['data'] = ddata
 
                 datatable['title'] = _u('Grades for assignment "%s"') % aname
@@ -499,58 +472,34 @@ def instructor_dashboard(request, course_id):
     # Admin
 
     elif 'List course staff' in action:
-        group = get_staff_group(course)
-        msg += _u('Staff group = {0}').format(group.name)
-        datatable = _group_members_table(group, _u("List of Staff"), course_id)
+        role = CourseStaffRole(course.location)
+        datatable = _role_members_table(role, _u("List of Staff"), course_id)
         track.views.server_track(request, "list-staff", {}, page="idashboard")
 
-    elif 'List course instructors' in action and request.user.is_staff:
-        group = get_instructor_group(course)
-        msg += _u('Instructor group = {0}').format(group.name)
-        log.debug('instructor grp={0}'.format(group.name))
-        uset = group.user_set.all()
-        datatable = {'header': [_u('Username'), _u('Full name')]}
-        datatable['data'] = [[x.username, x.profile.name] for x in uset]
-        datatable['title'] = _u('List of Instructors in course {0}').format(course_id)
+    elif 'List course instructors' in action and GlobalStaff().has_user(request.user):
+        role = CourseInstructorRole(course.location)
+        datatable = _role_members_table(role, _u("List of Instructors"), course_id)
         track.views.server_track(request, "list-instructors", {}, page="idashboard")
 
     elif action == 'Add course staff':
         uname = request.POST['staffuser']
-        group = get_staff_group(course)
-        msg += add_user_to_group(request, uname, group, 'staff', 'staff')
+        role = CourseStaffRole(course.location)
+        msg += add_user_to_role(request, uname, role, 'staff', 'staff')
 
     elif action == 'Add instructor' and request.user.is_staff:
         uname = request.POST['instructor']
-        try:
-            user = User.objects.get(username=uname)
-        except User.DoesNotExist:
-            msg += '<font color="red">' + _u('Error: unknown username "{0}"').format(uname) + '</font>'
-            user = None
-        if user is not None:
-            group = get_instructor_group(course)
-            msg += '<font color="green">' + _u('Added {user} to instructor group = {group}').format(user = user, group = group.name) + '</font>'
-            log.debug('staffgrp={0}'.format(group.name))
-            user.groups.add(group)
-            track.views.server_track(request, "add-instructor", {"instructor": unicode(user)}, page="idashboard")
+        role = CourseInstructorRole(course.location)
+        msg += add_user_to_role(request, uname, role, 'instructor', 'instructor')
 
     elif action == 'Remove course staff':
         uname = request.POST['staffuser']
-        group = get_staff_group(course)
-        msg += remove_user_from_group(request, uname, group, 'staff', 'staff')
+        role = CourseStaffRole(course.location)
+        msg += remove_user_from_role(request, uname, role, 'staff', 'staff')
 
     elif action == 'Remove instructor' and request.user.is_staff:
         uname = request.POST['instructor']
-        try:
-            user = User.objects.get(username=uname)
-        except User.DoesNotExist:
-            msg += '<font color="red">' + _u('Error: unknown username "{0}"').format(uname) + '</font>'
-            user = None
-        if user is not None:
-            group = get_instructor_group(course)
-            msg += '<font color="green">' + _u('Removed {user} from instructor group = {group}').format(user = user, group = group.name) + '</font>'
-            log.debug('instructorgrp={0}'.format(group.name))
-            user.groups.remove(group)
-            track.views.server_track(request, "remove-instructor", {"instructor": unicode(user)}, page="idashboard")
+        role = CourseInstructorRole(course.location)
+        msg += remove_user_from_role(request, uname, role, 'instructor', 'instructor')
 
     #----------------------------------------
     # DataDump
@@ -608,25 +557,24 @@ def instructor_dashboard(request, course_id):
     # Group management
 
     elif 'List beta testers' in action:
-        group = get_beta_group(course)
-        msg += _u('Beta test group = {0}').format(group.name)
-        datatable = _group_members_table(group, _u("List of beta_testers"), course_id)
+        role = CourseBetaTesterRole(course.location)
+        datatable = _role_members_table(role, _u("List of Beta Testers"), course_id)
         track.views.server_track(request, "list-beta-testers", {}, page="idashboard")
 
     elif action == 'Add beta testers':
         users = request.POST['betausers']
         log.debug("users: {0!r}".format(users))
-        group = get_beta_group(course)
+        role = CourseBetaTesterRole(course.location)
         for username_or_email in split_by_comma_and_whitespace(users):
             msg += u"<p>{0}</p>".format(
-                add_user_to_group(request, username_or_email, group, 'beta testers', 'beta-tester'))
+                add_user_to_role(request, username_or_email, role, 'beta testers', 'beta-tester'))
 
     elif action == 'Remove beta testers':
         users = request.POST['betausers']
-        group = get_beta_group(course)
+        role = CourseBetaTesterRole(course.location)
         for username_or_email in split_by_comma_and_whitespace(users):
             msg += u"<p>{0}</p>".format(
-                remove_user_from_group(request, username_or_email, group, 'beta testers', 'beta-tester'))
+                remove_user_from_role(request, username_or_email, role, 'beta testers', 'beta-tester'))
 
     #----------------------------------------
     # forum administration
@@ -690,10 +638,11 @@ def instructor_dashboard(request, course_id):
 
     elif action == 'Enroll multiple students':
 
+        is_shib_course = uses_shib(course)
         students = request.POST.get('multiple_students', '')
         auto_enroll = bool(request.POST.get('auto_enroll'))
         email_students = bool(request.POST.get('email_students'))
-        ret = _do_enroll_students(course, course_id, students, auto_enroll=auto_enroll, email_students=email_students)
+        ret = _do_enroll_students(course, course_id, students, auto_enroll=auto_enroll, email_students=email_students, is_shib_course=is_shib_course)
         datatable = ret['datatable']
 
     elif action == 'Unenroll multiple students':
@@ -1030,12 +979,12 @@ def _update_forum_role_membership(uname, course, rolename, add_or_remove):
     return msg
 
 
-def _group_members_table(group, title, course_id):
+def _role_members_table(role, title, course_id):
     """
     Return a data table of usernames and names of users in group_name.
 
     Arguments:
-        group -- a django group.
+        role -- a courseware.roles.AccessRole
         title -- a descriptive title to show the user
 
     Returns:
@@ -1044,75 +993,107 @@ def _group_members_table(group, title, course_id):
         'data': [[username, name] for all users]
         'title': "{title} in course {course}"
     """
-    uset = group.user_set.all()
+    uset = role.users_with_role()
     datatable = {'header': [_u('Username'), _u('Full name')]}
     datatable['data'] = [[x.username, x.profile.name] for x in uset]
     datatable['title'] = _u('{0} in course {1}').format(title, course_id)
     return datatable
 
 
-def _add_or_remove_user_group(request, username_or_email, group, group_title, event_name, do_add):
+def _user_from_name_or_email(username_or_email):
     """
-    Implementation for both add and remove functions, to get rid of shared code.  do_add is bool that determines which
-    to do.
+    Return the `django.contrib.auth.User` with the supplied username or email.
+
+    If `username_or_email` contains an `@` it is treated as an email, otherwise
+    it is treated as the username
     """
-    user = None
     username_or_email = strip_if_string(username_or_email)
-    try:
-        if '@' in username_or_email:
-            user = User.objects.get(email=username_or_email)
-        else:
-            user = User.objects.get(username=username_or_email)
-    except User.DoesNotExist:
-        msg = '<font color="red">' + _u('Error: unknown username or email "{0}"').format(username_or_email) + '</font>'
-        user = None
 
-    if user is not None:
-        action = "Added" if do_add else "Removed"
-        prep = "to" if do_add else "from"
-        msg = '<font color="green">' + _u('{action} {user} {prep} {title} group = {group}').format(user = user, title = group_title, group = group.name, action=action, prep=prep) + '</font>'
-        if do_add:
-            user.groups.add(group)
-        else:
-            user.groups.remove(group)
-        event = "add" if do_add else "remove"
-        track.views.server_track(request, "add-or-remove-user-group", {"event_name": event_name, "user": unicode(user), "event": event}, page="idashboard")
-
-    return msg
+    if '@' in username_or_email:
+        return User.objects.get(email=username_or_email)
+    else:
+        return User.objects.get(username=username_or_email)
 
 
-def add_user_to_group(request, username_or_email, group, group_title, event_name):
+def add_user_to_role(request, username_or_email, role, group_title, event_name):
     """
     Look up the given user by username (if no '@') or email (otherwise), and add them to group.
 
     Arguments:
        request: django request--used for tracking log
        username_or_email: who to add.  Decide if it's an email by presense of an '@'
-       group: django group object
+       group: A group name
        group_title: what to call this group in messages to user--e.g. "beta-testers".
        event_name: what to call this event when logging to tracking logs.
 
     Returns:
        html to insert in the message field
     """
-    return _add_or_remove_user_group(request, username_or_email, group, group_title, event_name, True)
+    username_or_email = strip_if_string(username_or_email)
+    try:
+        user = _user_from_name_or_email(username_or_email)
+    except User.DoesNotExist:
+        return u'<font color="red">Error: unknown username or email "{0}"</font>'.format(username_or_email)
+
+    role.add_users(user)
+
+    # Deal with historical event names
+    if event_name in ('staff', 'beta-tester'):
+        track.views.server_track(
+            request,
+            "add-or-remove-user-group",
+            {
+                "event_name": event_name,
+                "user": unicode(user),
+                "event": "add"
+            },
+            page="idashboard"
+        )
+    else:
+        track.views.server_track(request, "add-instructor", {"instructor": unicode(user)}, page="idashboard")
+
+    return '<font color="green">Added {0} to {1}</font>'.format(user, group_title)
 
 
-def remove_user_from_group(request, username_or_email, group, group_title, event_name):
+def remove_user_from_role(request, username_or_email, role, group_title, event_name):
     """
-    Look up the given user by username (if no '@') or email (otherwise), and remove them from group.
+    Look up the given user by username (if no '@') or email (otherwise), and remove them from the supplied role.
 
     Arguments:
        request: django request--used for tracking log
        username_or_email: who to remove.  Decide if it's an email by presense of an '@'
-       group: django group object
+       role: A courseware.roles.AccessRole
        group_title: what to call this group in messages to user--e.g. "beta-testers".
        event_name: what to call this event when logging to tracking logs.
 
     Returns:
        html to insert in the message field
     """
-    return _add_or_remove_user_group(request, username_or_email, group, group_title, event_name, False)
+
+    username_or_email = strip_if_string(username_or_email)
+    try:
+        user = _user_from_name_or_email(username_or_email)
+    except User.DoesNotExist:
+        return u'<font color="red">Error: unknown username or email "{0}"</font>'.format(username_or_email)
+
+    role.remove_users(user)
+
+    # Deal with historical event names
+    if event_name in ('staff', 'beta-tester'):
+        track.views.server_track(
+            request,
+            "add-or-remove-user-group",
+            {
+                "event_name": event_name,
+                "user": unicode(user),
+                "event": "remove"
+            },
+            page="idashboard"
+        )
+    else:
+        track.views.server_track(request, "remove-instructor", {"instructor": unicode(user)}, page="idashboard")
+
+    return '<font color="green">Removed {0} from {1}</font>'.format(user, group_title)
 
 
 def get_student_grade_summary_data(request, course, course_id, get_grades=True, get_raw_scores=False, use_offline=False):
@@ -1227,7 +1208,7 @@ def grade_summary(request, course_id):
 #-----------------------------------------------------------------------------
 # enrollment
 
-def _do_enroll_students(course, course_id, students, overload=False, auto_enroll=False, email_students=False):
+def _do_enroll_students(course, course_id, students, overload=False, auto_enroll=False, email_students=False, is_shib_course=False):
     """
     Do the actual work of enrolling multiple students, presented as a string
     of emails separated by commas or returns
@@ -1256,7 +1237,7 @@ def _do_enroll_students(course, course_id, students, overload=False, auto_enroll
         ceaset.delete()
 
     if email_students:
-        stripped_site_name = _remove_preview(settings.SITE_NAME)
+        stripped_site_name = settings.SITE_NAME
         registration_url = 'https://' + stripped_site_name + reverse('student.views.register_user')
         #Composition of email
         d = {'site_name': stripped_site_name,
@@ -1264,6 +1245,8 @@ def _do_enroll_students(course, course_id, students, overload=False, auto_enroll
              'course': course,
              'auto_enroll': auto_enroll,
              'course_url': 'https://' + stripped_site_name + '/courses/' + course_id,
+             'course_about_url': 'https://' + stripped_site_name + '/courses/' + course_id + '/about',
+             'is_shib_course': is_shib_course,
              }
 
     for student in new_students:
@@ -1345,7 +1328,7 @@ def _do_unenroll_students(course_id, students, email_students=False):
     old_students, _ = get_and_clean_student_list(students)
     status = dict([x, 'unprocessed'] for x in old_students)
 
-    stripped_site_name = _remove_preview(settings.SITE_NAME)
+    stripped_site_name = settings.SITE_NAME
     if email_students:
         course = course_from_id(course_id)
         #Composition of email
@@ -1414,6 +1397,7 @@ def send_mail_to_student(student, param_dict):
     `email_address`: email of student (a `str`)
     `full_name`: student full name (a `str`)
     `message`: type of email to send and template to use (a `str`)
+    `is_shib_course`: (a `boolean`)
                                         ]
     Returns a boolean indicating whether the email was sent successfully.
     """
@@ -1438,12 +1422,6 @@ def send_mail_to_student(student, param_dict):
         return True
     else:
         return False
-
-
-def _remove_preview(site_name):
-    if site_name[:8] == "preview.":
-        return site_name[8:]
-    return site_name
 
 
 def get_and_clean_student_list(students):
@@ -1630,3 +1608,12 @@ def get_background_task_table(course_id, problem_url=None, student=None, task_ty
             datatable['title'] = "{course_id} > {location}".format(course_id=course_id, location=problem_url)
 
     return msg, datatable
+
+
+def uses_shib(course):
+    """
+    Used to return whether course has Shibboleth as the enrollment domain
+
+    Returns a boolean indicating if Shibboleth authentication is set for this course.
+    """
+    return course.enrollment_domain and course.enrollment_domain.startswith(SHIBBOLETH_DOMAIN_PREFIX)

@@ -1,6 +1,6 @@
 require(["domReady", "jquery", "underscore", "gettext", "js/views/feedback_notification", "js/views/feedback_prompt",
-    "js/utils/get_date", "jquery.ui", "jquery.leanModal", "jquery.form", "jquery.smoothScroll"],
-    function(domReady, $, _, gettext, NotificationView, PromptView, DateUtils) {
+    "js/utils/get_date", "js/utils/module", "jquery.ui", "jquery.leanModal", "jquery.form", "jquery.smoothScroll"],
+    function(domReady, $, _, gettext, NotificationView, PromptView, DateUtils, ModuleUtils) {
 
 var $body;
 var $newComponentItem;
@@ -182,7 +182,7 @@ function saveSubsection() {
         $spinner.show();
     }
 
-    var id = $('.subsection-body').data('id');
+    var locator = $('.subsection-body').data('locator');
 
     // pull all 'normalized' metadata editable fields on page
     var metadata_fields = $('input[data-metadata-name]');
@@ -206,12 +206,11 @@ function saveSubsection() {
     });
 
     $.ajax({
-        url: "/save_item",
-        type: "POST",
+        url: ModuleUtils.getUpdateUrl(locator),
+        type: "PUT",
         dataType: "json",
         contentType: "application/json",
         data: JSON.stringify({
-            'id': id,
             'metadata': metadata
         }),
         success: function() {
@@ -230,19 +229,19 @@ function createNewUnit(e) {
 
     analytics.track('Created a Unit', {
         'course': course_location_analytics,
-        'parent_location': parent
+        'parent_locator': parent
     });
 
 
-    $.postJSON('/create_item', {
-        'parent_location': parent,
+    $.postJSON(ModuleUtils.getUpdateUrl(), {
+        'parent_locator': parent,
         'category': category,
         'display_name': gettext('New Unit')
     },
 
     function(data) {
         // redirect to the edit page
-        window.location = "/edit/" + data['id'];
+        window.location = "/unit/" + data['locator'];
     });
 }
 
@@ -271,11 +270,11 @@ function _deleteItem($el, type) {
                 click: function(view) {
                     view.hide();
 
-                    var id = $el.data('id');
+                    var locator = $el.data('locator');
 
                     analytics.track('Deleted an Item', {
                         'course': course_location_analytics,
-                        'id': id
+                        'id': locator
                     });
 
                     var deleting = new NotificationView.Mini({
@@ -285,7 +284,7 @@ function _deleteItem($el, type) {
 
                     $.ajax({
                         type: 'DELETE',
-                        url: $el.data('update_url')+'?'+ $.param({recurse: true, all_versions: true}),
+                        url: ModuleUtils.getUpdateUrl(locator) +'?'+ $.param({recurse: true, all_versions: true}),
                         success: function () {
                             $el.remove();
                             deleting.hide();

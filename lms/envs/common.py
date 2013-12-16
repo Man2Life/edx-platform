@@ -189,6 +189,18 @@ MITX_FEATURES = {
 
     # Automatically approve student identity verification attempts
     'AUTOMATIC_VERIFY_STUDENT_IDENTITY_FOR_TESTING': False,
+
+    # Disable instructor dash buttons for downloading course data
+    # when enrollment exceeds this number
+    'MAX_ENROLLMENT_INSTR_BUTTONS': 200,
+
+    # Grade calculation started from the new instructor dashboard will write
+    # grades CSV files to S3 and give links for downloads.
+    'ENABLE_S3_GRADE_DOWNLOADS': True,
+
+    # Give course staff unrestricted access to grade downloads (if set to False,
+    # only edX superusers can perform the downloads)
+    'ALLOW_COURSE_STAFF_GRADE_DOWNLOADS': False,
 }
 
 # Used for A/B testing
@@ -499,21 +511,21 @@ SIMPLE_WIKI_REQUIRE_LOGIN_EDIT = True
 SIMPLE_WIKI_REQUIRE_LOGIN_VIEW = False
 
 ################################# WIKI ###################################
+from course_wiki import settings as course_wiki_settings
+
 WIKI_ACCOUNT_HANDLING = False
 WIKI_EDITOR = 'course_wiki.editors.CodeMirror'
 WIKI_SHOW_MAX_CHILDREN = 0  # We don't use the little menu that shows children of an article in the breadcrumb
 WIKI_ANONYMOUS = False  # Don't allow anonymous access until the styling is figured out
-WIKI_CAN_CHANGE_PERMISSIONS = lambda article, user: user.is_staff or user.is_superuser
-WIKI_CAN_ASSIGN = lambda article, user: user.is_staff or user.is_superuser
+
+WIKI_CAN_DELETE = course_wiki_settings.CAN_DELETE
+WIKI_CAN_MODERATE = course_wiki_settings.CAN_MODERATE
+WIKI_CAN_CHANGE_PERMISSIONS = course_wiki_settings.CAN_CHANGE_PERMISSIONS
+WIKI_CAN_ASSIGN = course_wiki_settings.CAN_ASSIGN
 
 WIKI_USE_BOOTSTRAP_SELECT_WIDGET = False
 WIKI_LINK_LIVE_LOOKUPS = False
 WIKI_LINK_DEFAULT_LEVEL = 2
-
-################################# Pearson TestCenter config  ################
-
-PEARSONVUE_SIGNINPAGE_URL = "https://www1.pearsonvue.com/testtaker/signin/SignInPage/EDX"
-# TESTCENTER_ACCOMMODATION_REQUEST_EMAIL = "exam-help@example.com"
 
 ##### Feedback submission mechanism #####
 FEEDBACK_SUBMISSION_EMAIL = None
@@ -537,6 +549,12 @@ CC_PROCESSOR = {
 }
 # Setting for PAID_COURSE_REGISTRATION, DOES NOT AFFECT VERIFIED STUDENTS
 PAID_COURSE_REGISTRATION_CURRENCY = ['usd', '$']
+
+# Members of this group are allowed to generate payment reports
+PAYMENT_REPORT_GENERATOR_GROUP = 'shoppingcart_report_access'
+# Maximum number of rows the report can contain
+PAYMENT_REPORT_MAX_ITEMS = 10000
+
 ################################# open ended grading config  #####################
 
 #By setting up the default settings with an incorrect user name and password,
@@ -573,6 +591,7 @@ WAFFLE_MAX_AGE = 1209600
 STATICFILES_FINDERS = (
     'staticfiles.finders.FileSystemFinder',
     'staticfiles.finders.AppDirectoriesFinder',
+    'pipeline.finders.PipelineFinder',
 )
 
 # List of callables that know how to import templates from various sources.
@@ -840,6 +859,7 @@ CELERY_DEFAULT_EXCHANGE_TYPE = 'direct'
 HIGH_PRIORITY_QUEUE = 'edx.core.high'
 DEFAULT_PRIORITY_QUEUE = 'edx.core.default'
 LOW_PRIORITY_QUEUE = 'edx.core.low'
+HIGH_MEM_QUEUE = 'edx.core.high_mem'
 
 CELERY_QUEUE_HA_POLICY = 'all'
 
@@ -851,7 +871,8 @@ CELERY_DEFAULT_ROUTING_KEY = DEFAULT_PRIORITY_QUEUE
 CELERY_QUEUES = {
     HIGH_PRIORITY_QUEUE: {},
     LOW_PRIORITY_QUEUE: {},
-    DEFAULT_PRIORITY_QUEUE: {}
+    DEFAULT_PRIORITY_QUEUE: {},
+    HIGH_MEM_QUEUE: {},
 }
 
 # let logging work as configured:
@@ -895,6 +916,8 @@ BULK_EMAIL_LOG_SENT_EMAILS = False
 # value depending on the number of workers that might be sending email in
 # parallel, and what the SES rate is.
 BULK_EMAIL_RETRY_DELAY_BETWEEN_SENDS = 0.02
+
+
 
 ################################### APPS ######################################
 INSTALLED_APPS = (
@@ -1061,3 +1084,12 @@ REGISTRATION_OPTIONAL_FIELDS = set([
     'mailing_address',
     'goals',
 ])
+
+###################### Grade Downloads ######################
+GRADES_DOWNLOAD_ROUTING_KEY = HIGH_MEM_QUEUE
+
+GRADES_DOWNLOAD = {
+    'STORAGE_TYPE': 'localfs',
+    'BUCKET': 'edx-grades',
+    'ROOT_PATH': '/tmp/edx-s3/grades',
+}
