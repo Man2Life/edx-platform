@@ -34,6 +34,7 @@ from courseware import grades
 from courseware.access import (has_access, get_access_group_name,
                                course_beta_test_group_name)
 from courseware.courses import get_course_with_access, get_cms_course_link
+from courseware.courses import get_courses
 from courseware.models import StudentModule
 from courseware.model_data import FieldDataCache
 from django_comment_common.models import (Role,
@@ -247,7 +248,7 @@ def instructor_dashboard(request, course_id):
         datatable = get_student_grade_summary_data(request, course, course_id, get_grades=True, use_offline=use_offline)
         datatable['title'] = _u('Summary Grades of students enrolled in {0}').format(course_id)
         track.views.server_track(request, "dump-grades", {}, page="idashboard")
-
+    
     elif 'Dump all RAW grades' in action:
         log.debug(action)
         datatable = get_student_grade_summary_data(request, course, course_id, get_grades=True,
@@ -1108,6 +1109,96 @@ def remove_user_from_group(request, username_or_email, group, group_title, event
     """
     return _add_or_remove_user_group(request, username_or_email, group, group_title, event_name, False)
 
+
+def interg_stat(request):
+    courses = get_courses(request.user, request.META.get('HTTP_HOST'))
+
+    coursemap = {
+        u'GBOU_CPM/01/2013-2014': u'Математика'
+
+    }
+
+    def return_csv(func, datatable, file_pointer=None):
+        """Outputs a CSV file from the contents of a datatable."""
+        if file_pointer is None:
+            response = HttpResponse(mimetype='text/csv')
+            response['Content-Disposition'] = 'attachment; filename={0}'.format(func)
+        else:
+            response = file_pointer
+        writer = csv.writer(response, dialect='excel', quotechar='"', quoting=csv.QUOTE_ALL)
+        encoded_row = [unicode(s).encode('utf-8') for s in datatable['header']]
+        writer.writerow(encoded_row)
+        for datarow in datatable['data']:
+            encoded_row = [unicode(s).encode('utf-8') for s in datarow]
+            writer.writerow(encoded_row)
+        return response
+
+    header = [_u('ID'), _u('1'), _u('2'), _u('3'), _u('4'), _u('5'), _u('6'), _u('7'), _u('8'), _u('9')]
+    assignments = []
+    datatable = {'header': header, 'assignments': assignments, 'students': []}
+    data = []
+
+    for course in courses:
+        if course.id not in coursemap:
+            continue
+        enrolled_students = User.objects.filter(
+            courseenrollment__course_id=course.id,
+            courseenrollment__is_active=1,
+        ).prefetch_related("groups").order_by('username')
+
+        if enrolled_students.count() > 0:
+            # just to construct the header
+            gradeset = student_grades(enrolled_students[0], request, course, keep_raw_scores=False, use_offline=False)
+            field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
+            course.id, enrolled_students[0], course, depth=None)
+        
+            cnt_enrolled = 0
+            cnt_enrolled_0 = 0
+            cnt_enrolled_07 = 0
+            cnt_enrolled_1 = 0
+            cnt_nonenrolled = 0
+            cnt_nonenrolled_0 = 0
+            cnt_nonenrolled_07 = 0
+            cnt_nonenrolled_1 = 0
+
+            category_weights = {}
+
+            # log.debug('student {0} gradeset {1}'.format(enrolled_students[0], gradeset))
+            for section in gradeset['grade_breakdown']:
+                category_weights[section['category']] = section['weight']
+
+            for student in enrolled_students:
+                courseware_summary = grades.progress_summary(student, request, course,
+                                                     field_data_cache);
+                total = 0                
+                count = 0
+                for chapter in courseware_summary:
+                    for section in chapter['sections']:
+                        if not section['graded'] or len(section['format']) < 1:
+                            continue
+                        # total += ((section['section_total'].earned / section['section_total'].possible) if section['section_total'].possible else 0) * category_weights.get(section['format'], 0.0)
+                        total += ((section['section_total'].earned / section['section_total'].possible) if section['section_total'].possible else 0)
+                        count +=1
+                if coursemap[course.id] in student.profile.allowed_courses:
+                    cnt_enrolled += 1
+                    if (count > 0) and (total/count > 0):
+                        cnt_enrolled_0 += 1
+                    if (count > 0) and (total/count > 0.7):
+                        cnt_enrolled_07 += 1
+                    if (count > 0) and (total/count > 0.99):
+                        cnt_enrolled_1 += 1
+                else:
+                    cnt_nonenrolled += 1
+                    if (count > 0) and (total/count > 0):
+                        cnt_nonenrolled_0 += 1
+                    if (count > 0) and (total/count > 0.7):
+                        cnt_nonenrolled_07 += 1
+                    if (count > 0) and (total/count > 0.99):
+                        cnt_nonenrolled_1 += 1
+        datarow = [coursemap[course.id], cnt_enrolled, cnt_enrolled_0, cnt_enrolled_07, cnt_enrolled_1, cnt_nonenrolled, cnt_nonenrolled_0, cnt_nonenrolled_07, cnt_enrolled_1]
+        data.append(datarow)
+    datatable['data'] = data
+    return return_csv('grades_{0}_raw.csv'.format(course.id),datatable)
 
 def get_student_grade_summary_data(request, course, course_id, get_grades=True, get_raw_scores=False, use_offline=False):
     '''
