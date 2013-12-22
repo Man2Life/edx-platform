@@ -1210,7 +1210,7 @@ u'CPM/volimp01/2013' : 'Вводный курс',
                         # total += ((section['section_total'].earned / section['section_total'].possible) if section['section_total'].possible else 0) * category_weights.get(section['format'], 0.0)
                         total += ((section['section_total'].earned / section['section_total'].possible) if section['section_total'].possible else 0)
                         count +=1
-                if coursemap[course.id] in student.profile.allowed_courses:
+                if student.profile.allowed_courses is not None and coursemap[course.id] in student.profile.allowed_courses:
                     cnt_enrolled += 1
                     if (count > 0) and (total/count > 0):
                         cnt_enrolled_0 += 1
@@ -1229,7 +1229,7 @@ u'CPM/volimp01/2013' : 'Вводный курс',
         datarow = [coursemap[course.id], '0' , cnt_enrolled, cnt_enrolled_0, cnt_enrolled_07, cnt_enrolled_1, cnt_nonenrolled, cnt_nonenrolled_0, cnt_nonenrolled_07, cnt_nonenrolled_1]
         data.append(datarow)
     datatable['data'] = data
-    return return_csv('grades_{0}_raw.csv'.format(course.id),datatable)
+    return return_csv('integr_stat.csv',datatable)
 
 def get_student_grade_summary_data(request, course, course_id, get_grades=True, get_raw_scores=False, use_offline=False):
     '''
