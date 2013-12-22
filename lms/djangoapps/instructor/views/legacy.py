@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Instructor Views
 """
@@ -1114,9 +1115,39 @@ def interg_stat(request):
     courses = get_courses(request.user, request.META.get('HTTP_HOST'))
 
     coursemap = {
-        u'GBOU_CPM/01/2013-2014': u'Математика'
-
-    }
+u'CPM/Astr012013/2013-2014' : 'Астрономия',
+u'CPM/Bi012013/2013-2014' : 'Биология',
+#u'CPM/EDX_01/2013-2014' : '',
+u'CPM/Eco012013/2013-2014' : 'Экология',
+u'CPM/Econom012013/2013-2014' : 'Экономика',
+#u'CPM/Econom022013/2013-2014' : '',
+u'CPM/En012013/2013-2014' : 'Английский язык',
+#u'CPM/En02/2013' : '',
+#u'CPM/French012013/2013-2014' : '',
+u'CPM/Geo02_2013/2013-2014' : 'География',
+u'CPM/Hist012013/2013-2014' : 'История',
+#u'CPM/Hist022013/2013-2014' : '',
+u'CPM/Lit01/2013-2014' : 'Литература',
+#u'CPM/Lit022013/2013-2014' : '',
+u'CPM/MXK012013/2013-2014' : 'Искусство (МХК)',
+u'CPM/Ma01_2013/2013-2014' : 'Математика',
+#u'CPM/Mus012013/2013-2014' : '',
+u'CPM/Nem012013/2013-2014' : 'Немецкий язык',
+u'CPM/OBG012013/2013-2014' : 'ОБЖ',
+#u'CPM/PID01/2013-2014' : '',
+u'CPM/Pravo012013/2013-2014' : 'Право',
+#u'CPM/Pravo022013/2013-2014' : '',
+#u'CPM/Psi012013/2013-2014' : '',
+u'CPM/Russian001/2013' : 'Русский язык',
+u'CPM/Techno012013/2013-2014' : 'Технология',
+u'CPM/chemistry01/2013' : 'Химия',
+u'CPM/french01/2013' : 'Французский язык',
+u'CPM/gym01/2013' : 'Физическая культура',
+u'CPM/inf07/2013-2014' : 'Информатика',
+u'CPM/physics01/2013' : 'Физика',
+u'CPM/socio01/2013' : 'Обществознание',
+u'CPM/volimp01/2013' : 'Вводный курс',
+}
 
     def return_csv(func, datatable, file_pointer=None):
         """Outputs a CSV file from the contents of a datatable."""
@@ -1133,7 +1164,7 @@ def interg_stat(request):
             writer.writerow(encoded_row)
         return response
 
-    header = [_u('ID'), _u('1'), _u('2'), _u('3'), _u('4'), _u('5'), _u('6'), _u('7'), _u('8'), _u('9')]
+    header = [_u('ID'), _u('Заявок'), _u('Кол-во по заявкам'), _u('Кол-во приступивших'), _u('Кол-во 2/3'), _u('Кол-во 100%'), _u('Кол-во свободной регистрации'), _u('Кол-во приступивших'), _u('Кол-во 2/3'), _u('Кол-во 100%') ]
     assignments = []
     datatable = {'header': header, 'assignments': assignments, 'students': []}
     data = []
@@ -1149,9 +1180,7 @@ def interg_stat(request):
         if enrolled_students.count() > 0:
             # just to construct the header
             gradeset = student_grades(enrolled_students[0], request, course, keep_raw_scores=False, use_offline=False)
-            field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
-            course.id, enrolled_students[0], course, depth=None)
-        
+            
             cnt_enrolled = 0
             cnt_enrolled_0 = 0
             cnt_enrolled_07 = 0
@@ -1168,6 +1197,8 @@ def interg_stat(request):
                 category_weights[section['category']] = section['weight']
 
             for student in enrolled_students:
+                field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
+                    course.id, student, course, depth=None)
                 courseware_summary = grades.progress_summary(student, request, course,
                                                      field_data_cache);
                 total = 0                
@@ -1195,7 +1226,7 @@ def interg_stat(request):
                         cnt_nonenrolled_07 += 1
                     if (count > 0) and (total/count > 0.99):
                         cnt_nonenrolled_1 += 1
-        datarow = [coursemap[course.id], cnt_enrolled, cnt_enrolled_0, cnt_enrolled_07, cnt_enrolled_1, cnt_nonenrolled, cnt_nonenrolled_0, cnt_nonenrolled_07, cnt_enrolled_1]
+        datarow = [coursemap[course.id], '0' , cnt_enrolled, cnt_enrolled_0, cnt_enrolled_07, cnt_enrolled_1, cnt_nonenrolled, cnt_nonenrolled_0, cnt_nonenrolled_07, cnt_nonenrolled_1]
         data.append(datarow)
     datatable['data'] = data
     return return_csv('grades_{0}_raw.csv'.format(course.id),datatable)
