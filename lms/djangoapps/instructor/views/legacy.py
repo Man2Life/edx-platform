@@ -35,7 +35,7 @@ from courseware import grades
 from courseware.access import (has_access, get_access_group_name,
                                course_beta_test_group_name)
 from courseware.courses import get_course_with_access, get_cms_course_link
-from courseware.courses import get_courses
+from courseware.courses import get_courses, get_course
 from courseware.models import StudentModule
 from courseware.model_data import FieldDataCache
 from django_comment_common.models import (Role,
@@ -1123,7 +1123,7 @@ u'CPM/Econom012013/2013-2014' : u'Экономика',
 #u'CPM/Econom022013/2013-2014' : u'',
 u'CPM/En012013/2013-2014' : u'Английский язык',
 #u'CPM/En02/2013' : u'',
-#u'CPM/French012013/2013-2014' : u'',
+u'CPM/French012013/2013-2014' : u'Французский язык',
 u'CPM/Geo02_2013/2013-2014' : u'География',
 u'CPM/Hist012013/2013-2014' : u'История',
 #u'CPM/Hist022013/2013-2014' : u'',
@@ -1141,7 +1141,7 @@ u'CPM/Pravo012013/2013-2014' : u'Право',
 u'CPM/Russian001/2013' : u'Русский язык',
 u'CPM/Techno012013/2013-2014' : u'Технология',
 u'CPM/chemistry01/2013' : u'Химия',
-u'CPM/french01/2013' : u'Французский язык',
+#u'CPM/french01/2013' : u'Французский язык',
 u'CPM/gym01/2013' : u'Физическая культура',
 u'CPM/inf07/2013-2014' : u'Информатика',
 u'CPM/physics01/2013' : u'Физика',
@@ -1229,7 +1229,150 @@ u'CPM/volimp01/2013' : u'Вводный курс',
         datarow = [coursemap[course.id], '0' , cnt_enrolled, cnt_enrolled_0, cnt_enrolled_07, cnt_enrolled_1, cnt_nonenrolled, cnt_nonenrolled_0, cnt_nonenrolled_07, cnt_nonenrolled_1]
         data.append(datarow)
     datatable['data'] = data
-    return return_csv('integr_stat.csv',datatable)
+    return return_csv('integr_stat.csv',datatable, open("/var/www/integr_stat.csv"))
+
+def UnicodeDictReader(utf8_data, **kwargs):
+    csv_reader = csv.DictReader(utf8_data, **kwargs)
+    for row in csv_reader:
+        yield dict([(key, unicode(value, 'utf-8')) for key, value in row.iteritems()])  
+
+def fullstat(request):
+    coursemap = {
+u'CPM/Astr012013/2013-2014' : u'Астрономия',
+u'CPM/Bi012013/2013-2014' : u'Биология',
+#u'CPM/EDX_01/2013-2014' : u'',
+u'CPM/Eco012013/2013-2014' : u'Экология',
+u'CPM/Econom012013/2013-2014' : u'Экономика',
+#u'CPM/Econom022013/2013-2014' : u'',
+u'CPM/En012013/2013-2014' : u'Английский язык',
+#u'CPM/En02/2013' : u'',
+u'CPM/French012013/2013-2014' : u'Французский язык',
+u'CPM/Geo02_2013/2013-2014' : u'География',
+u'CPM/Hist012013/2013-2014' : u'История',
+#u'CPM/Hist022013/2013-2014' : u'',
+u'CPM/Lit01/2013-2014' : u'Литература',
+#u'CPM/Lit022013/2013-2014' : u'',
+u'CPM/MXK012013/2013-2014' : u'Искусство (МХК)',
+u'CPM/Ma01_2013/2013-2014' : u'Математика',
+#u'CPM/Mus012013/2013-2014' : u'',
+u'CPM/Nem012013/2013-2014' : u'Немецкий язык',
+u'CPM/OBG012013/2013-2014' : u'ОБЖ',
+#u'CPM/PID01/2013-2014' : u'',
+u'CPM/Pravo012013/2013-2014' : u'Право',
+#u'CPM/Pravo022013/2013-2014' : u'',
+#u'CPM/Psi012013/2013-2014' : u'',
+u'CPM/Russian001/2013' : u'Русский язык',
+u'CPM/Techno012013/2013-2014' : u'Технология',
+u'CPM/chemistry01/2013' : u'Химия',
+#u'CPM/french01/2013' : u'Французский язык',
+u'CPM/gym01/2013' : u'Физическая культура',
+u'CPM/inf07/2013-2014' : u'Информатика',
+u'CPM/physics01/2013' : u'Физика',
+u'CPM/socio01/2013' : u'Обществознание',
+u'CPM/volimp01/2013' : u'Вводный курс',
+}
+
+    def return_csv(func, datatable, file_pointer=None):
+        """Outputs a CSV file from the contents of a datatable."""
+        if file_pointer is None:
+            response = HttpResponse(mimetype='text/csv')
+            response['Content-Disposition'] = 'attachment; filename={0}'.format(func)
+        else:
+            response = file_pointer
+        writer = csv.writer(response, dialect='excel', quotechar='"', quoting=csv.QUOTE_ALL)
+        encoded_row = [unicode(s).encode('utf-8') for s in datatable['header']]
+        writer.writerow(encoded_row)
+        for datarow in datatable['data']:
+            encoded_row = [unicode(s).encode('utf-8') for s in datarow]
+            writer.writerow(encoded_row)
+        return response
+
+    header = [u'ФИО', u'ФИО (измененное)', u'email', u'email (измененное)', u'логин школы', u'курс', u'зарегистрирован', u'Задачи/Задания(Модули)']
+    assignments = []
+    datatable = {'header': header, 'assignments': assignments, 'students': []}
+    data = []
+
+
+    f = open("/opt/data.csv")
+
+    if f is None:
+        return False;
+
+    ff = UnicodeDictReader(f, delimiter=';', quoting=csv.QUOTE_NONE)
+
+    idx = 0
+    for row in ff:
+        idx += 1
+
+        datarow = []
+
+        try:
+            user = User.objects.filter(email=row['email'])[0];
+        except:
+            try:
+                user = User.objects.filter(profile__meta__contains = row['email'])[0];
+            except:
+                log.error("No user found on line {0}".format(idx))
+
+        found = False
+        for course_id, course_name in coursemap.iteritems():
+            if course_name in row.subject:
+                found = True
+                break;
+        if not found:
+            continue
+
+        #User
+        name = row['second-name'] + row['first-name'] + row['patronymic']
+        datarow += [row['second-name'] + row['first-name'] + row['patronymic']]
+        if user.profile.name != name:
+            datarow += [user.profile.name]
+        else:
+            datarow += ['']
+        datarow += [row['login']]
+        datarow += [row['email']]
+        datarow += ['']
+        #Course
+        course = get_course(course_id)
+        datarow += course_name
+
+        try:
+            user.courseenrollment_set.filter(course_id = course_id)[0]
+            datarow += u'Да'
+        except:
+            datarow += u'Нет'
+            continue
+
+
+        
+        #Raw statistic by problems
+        gradeset = student_grades(user, request, course, keep_raw_scores=True, use_offline=False)
+        sgrades = [(getattr(score, 'earned', '') or score[0]) for score in gradeset['raw_scores']]
+        datarow += sgrades
+
+        #By subsection
+        category_weights = {}
+
+        for section in gradeset['grade_breakdown']:
+            category_weights[section['category']] = section['weight']    
+
+        field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
+                course_id, user, course, depth=None)
+            
+        courseware_summary = grades.progress_summary(user, request, course,
+                                             field_data_cache);
+        for chapter in courseware_summary:
+            total = 0
+            for section in chapter['sections']:
+                if not section['graded'] or len(section['format']) < 1:
+                    continue
+                sgrades += [((section['section_total'].earned / section['section_total'].possible) if section['section_total'].possible else 0)]
+                total += ((section['section_total'].earned / section['section_total'].possible) if section['section_total'].possible else 0) * category_weights.get(section['format'], 0.0)
+            sgrades += [total]
+        datarow += sgrades
+        data.append(datarow)
+    datatable['data'] = data
+    return return_csv('full_stat.csv',datatable, open("/var/www/fullstat.csv"))
 
 def get_student_grade_summary_data(request, course, course_id, get_grades=True, get_raw_scores=False, use_offline=False):
     '''
