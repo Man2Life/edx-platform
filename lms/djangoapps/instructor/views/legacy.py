@@ -1287,7 +1287,7 @@ u'CPM/volimp01/2013' : u'Вводный курс',
             writer.writerow(encoded_row)
         return response
 
-    header = [u'ФИО', u'ФИО (измененное)', u'email', u'email (измененное)', u'логин школы', u'курс', u'зарегистрирован', u'Задачи/Задания(Модули)']
+    header = [u'ФИО', u'ФИО (измененное)', u'логин школы', u'email', u'email (измененное)', u'курс', u'зарегистрирован', u'Задачи/Задания(Модули)']
     assignments = []
     datatable = {'header': header, 'assignments': assignments, 'students': []}
     data = []
@@ -1316,34 +1316,33 @@ u'CPM/volimp01/2013' : u'Вводный курс',
 
         found = False
         for course_id, course_name in coursemap.iteritems():
-            if course_name in row.subject:
+            if course_name in row['subject']:
                 found = True
-                break;
+                break
         if not found:
             continue
 
         #User
-        name = row['second-name'] + row['first-name'] + row['patronymic']
+        name = row['second-name'] + ' ' + row['first-name'] + ' ' + row['patronymic']
         datarow += [row['second-name'] + row['first-name'] + row['patronymic']]
         if user.profile.name != name:
             datarow += [user.profile.name]
         else:
-            datarow += ['']
+            datarow += [u'']
         datarow += [row['login']]
         datarow += [row['email']]
-        datarow += ['']
+        datarow += [u'']
         #Course
         course = get_course(course_id)
-        datarow += course_name
+        datarow += [course_name]
 
         try:
             user.courseenrollment_set.filter(course_id = course_id)[0]
-            datarow += u'Да'
+            datarow += [u'Да']
         except:
-            datarow += u'Нет'
+            datarow += [u'Нет']
+            data.append(datarow)
             continue
-
-
         
         #Raw statistic by problems
         gradeset = student_grades(user, request, course, keep_raw_scores=True, use_offline=False)
@@ -1372,7 +1371,7 @@ u'CPM/volimp01/2013' : u'Вводный курс',
         datarow += sgrades
         data.append(datarow)
     datatable['data'] = data
-    return return_csv('full_stat.csv',datatable, open("/var/www/fullstat.csv"))
+    return return_csv('full_stat.csv',datatable, open("/var/www/fullstat.csv", "w"))
 
 def get_student_grade_summary_data(request, course, course_id, get_grades=True, get_raw_scores=False, use_offline=False):
     '''
