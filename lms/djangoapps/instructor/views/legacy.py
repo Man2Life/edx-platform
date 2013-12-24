@@ -1292,7 +1292,46 @@ u'CPM/volimp01/2013' : u'Вводный курс',
     datatable = {'header': header, 'assignments': assignments, 'students': []}
     data = []
 
+    for course_id, course_name in coursemap.iteritems():
+        datarow = []
+        
+        datarow += [u'']
+        datarow += [u'']
+        datarow += [u'']
+        datarow += [u'']
+        datarow += [u'']
 
+        course = get_course(course_id)
+        datarow += [course_name]
+
+        datarow += [u'']
+
+        assignments = []
+        
+        enrolled_students = User.objects.filter(
+            courseenrollment__course_id=course_id,
+        ).prefetch_related("groups").order_by('username')
+
+
+        gradeset = student_grades(enrolled_students[0], request, course, keep_raw_scores=True, use_offline=False)
+        field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
+            course_id, enrolled_students[0], course, depth=None)
+        courseware_summary = grades.progress_summary(enrolled_students[0], request, course,
+                                                 field_data_cache);
+
+
+        assignments += [score.section for score in gradeset['raw_scores']]
+        
+        for chapter in courseware_summary:
+            for section in chapter['sections']:
+                if not section['graded'] or len(section['format']) < 1:
+                    continue
+                assignments += [section['format']]
+            assignments += [chapter['display_name']]
+
+        datarow += assignments
+
+        
     f = open("/opt/data.csv")
 
     if f is None:
@@ -1324,14 +1363,17 @@ u'CPM/volimp01/2013' : u'Вводный курс',
 
         #User
         name = row['second-name'] + ' ' + row['first-name'] + ' ' + row['patronymic']
-        datarow += [row['second-name'] + row['first-name'] + row['patronymic']]
+        datarow += [name]
         if user.profile.name != name:
             datarow += [user.profile.name]
         else:
             datarow += [u'']
         datarow += [row['login']]
         datarow += [row['email']]
-        datarow += [u'']
+        if user.email != row['email']:
+            datarow += [user.email]
+        else:
+            datarow += [u'']
         #Course
         course = get_course(course_id)
         datarow += [course_name]
@@ -1346,10 +1388,10 @@ u'CPM/volimp01/2013' : u'Вводный курс',
         
         #Raw statistic by problems
         gradeset = student_grades(user, request, course, keep_raw_scores=True, use_offline=False)
-        sgrades = [(getattr(score, 'earned', '') or score[0]) for score in gradeset['raw_scores']]
-        datarow += sgrades
-
+        statprob = [(getattr(score, 'earned', '') or score[0]) for score in gradeset['raw_scores']]
+        
         #By subsection
+        statsec = []
         category_weights = {}
 
         for section in gradeset['grade_breakdown']:
@@ -1360,15 +1402,33 @@ u'CPM/volimp01/2013' : u'Вводный курс',
             
         courseware_summary = grades.progress_summary(user, request, course,
                                              field_data_cache);
+        complition = 0
+        complition_cnt = 0
         for chapter in courseware_summary:
             total = 0
             for section in chapter['sections']:
                 if not section['graded'] or len(section['format']) < 1:
                     continue
-                sgrades += [((section['section_total'].earned / section['section_total'].possible) if section['section_total'].possible else 0)]
+                statsec += [((section['section_total'].earned / section['section_total'].possible) if section['section_total'].possible else 0)]
                 total += ((section['section_total'].earned / section['section_total'].possible) if section['section_total'].possible else 0) * category_weights.get(section['format'], 0.0)
-            sgrades += [total]
-        datarow += sgrades
+            statsec += [total]
+            if chapter['section'].count() > 0:
+                complition += total
+                complition_cnt += 1
+        complition = complition / complition_cnt
+        if complition_cnt > 0.7:
+            datarow += u"Да"
+        else:
+            datarow += u"Нет"
+        
+        if complition_cnt > 0.99:
+            datarow += u"Да"
+        else:
+            datarow += u"Нет"
+
+        datarow += statprob
+        datarow += statsec
+        
         data.append(datarow)
     datatable['data'] = data
     return return_csv('full_stat.csv',datatable, open("/var/www/fullstat.csv", "w"))
