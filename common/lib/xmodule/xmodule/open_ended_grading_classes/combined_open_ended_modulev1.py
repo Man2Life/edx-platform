@@ -909,6 +909,7 @@ class CombinedOpenEndedV1Module():
         score_dict = {
             'score': score,
             'total': max_score,
+            'instance_state': self.instance_state,
         }
 
         return score_dict

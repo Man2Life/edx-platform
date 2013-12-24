@@ -13,11 +13,13 @@ from xblock.fields import Scope
 from .module_render import get_module, get_module_for_descriptor
 from xmodule import graders
 from xmodule.capa_module import CapaDescriptor
-from xmodule.graders import Score
+#from xmodule.graders import Score
 from .models import StudentModule
+from collections import namedtuple
 
 log = logging.getLogger("mitx.courseware")
 
+Score = namedtuple("Score", "earned possible graded section instance_state")
 
 def yield_module_descendents(module):
     stack = module.get_display_items()
@@ -192,7 +194,7 @@ def grade(student, request, course, field_data_cache=None, keep_raw_scores=False
 
                 for module_descriptor in yield_dynamic_descriptor_descendents(section_descriptor, create_module):
 
-                    (correct, total) = get_score(course.id, student, module_descriptor, create_module, field_data_cache)
+                    (correct, total, instance_state) = get_score(course.id, student, module_descriptor, create_module, field_data_cache)
                     if correct is None and total is None:
                         continue
 
@@ -207,13 +209,13 @@ def grade(student, request, course, field_data_cache=None, keep_raw_scores=False
                         #We simply cannot grade a problem that is 12/0, because we might need it as a percentage
                         graded = False
 
-                    scores.append(Score(correct, total, graded, module_descriptor.display_name_with_default))
+                    scores.append(Score(correct, total, graded, module_descriptor.display_name_with_default, instance_state))
 
                 _, graded_total = graders.aggregate_scores(scores, section_name)
                 if keep_raw_scores:
                     raw_scores += scores
             else:
-                graded_total = Score(0.0, 1.0, True, section_name)
+                graded_total = Score(0.0, 1.0, True, section_name, None)
 
             #Add the graded total to totaled_scores
             if graded_total.possible > 0:
@@ -315,11 +317,11 @@ def progress_summary(student, request, course, field_data_cache):
             for module_descriptor in yield_dynamic_descriptor_descendents(section_module, module_creator):
 
                 course_id = course.id
-                (correct, total) = get_score(course_id, student, module_descriptor, module_creator, field_data_cache)
+                (correct, total, instance_state) = get_score(course_id, student, module_descriptor, module_creator, field_data_cache)
                 if correct is None and total is None:
                     continue
 
-                scores.append(Score(correct, total, graded, module_descriptor.display_name_with_default))
+                scores.append(Score(correct, total, graded, module_descriptor.display_name_with_default, instance_state))
 
             scores.reverse()
             section_total, _ = graders.aggregate_scores(
@@ -359,23 +361,27 @@ def get_score(course_id, user, problem_descriptor, module_creator, field_data_ca
     cache: A FieldDataCache
     """
     if not user.is_authenticated():
-        return (None, None)
+        return (None, None, None)
 
     # some problems have state that is updated independently of interaction
     # with the LMS, so they need to always be scored. (E.g. foldit.)
+    # at first that is CombinedOpenEndedModule!
     if problem_descriptor.always_recalculate_grades:
         problem = module_creator(problem_descriptor)
         if problem is None:
-            return (None, None)
+            return (None, None, None)
         score = problem.get_score()
         if score is not None:
-            return (score['score'], score['total'])
+            if 'instance_state' in score.keys():#if it is CombinedOpenEnded problem,then have additional info
+                return (score['score'], score['total'], score['instance_state'])
+            #else have no additional info
+            return (score['score'], score['total'], None)
         else:
-            return (None, None)
+            return (None, None, None)
 
     if not problem_descriptor.has_score:
         # These are not problems, and do not have a score
-        return (None, None)
+        return (None, None, None)
 
     # Create a fake KeyValueStore key to pull out the StudentModule
     key = DjangoKeyValueStore.Key(
@@ -386,7 +392,6 @@ def get_score(course_id, user, problem_descriptor, module_creator, field_data_ca
     )
 
     student_module = field_data_cache.find(key)
-
     if student_module is not None and student_module.max_grade is not None:
         correct = student_module.grade if student_module.grade is not None else 0
         total = student_module.max_grade
@@ -396,7 +401,7 @@ def get_score(course_id, user, problem_descriptor, module_creator, field_data_ca
         # Otherwise, the max score (cached in student_module) won't be available
         problem = module_creator(problem_descriptor)
         if problem is None:
-            return (None, None)
+            return (None, None, None)
 
         correct = 0.0
         total = problem.max_score()
@@ -404,7 +409,7 @@ def get_score(course_id, user, problem_descriptor, module_creator, field_data_ca
         # Problem may be an error module (if something in the problem builder failed)
         # In which case total might be None
         if total is None:
-            return (None, None)
+            return (None, None, None)
 
     # Now we re-weight the problem, if specified
     weight = problem_descriptor.weight
@@ -415,4 +420,4 @@ def get_score(course_id, user, problem_descriptor, module_creator, field_data_ca
         correct = correct * weight / total
         total = weight
 
-    return (correct, total)
+    return (correct, total, None)

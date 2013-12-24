@@ -314,7 +314,8 @@ class OpenEndedChild(object):
         """
         score = self.latest_score()
         return {'score': score if score is not None else 0,
-                'total': self._max_score}
+                'total': self._max_score,
+                'child_history': self.child_history}
 
     def reset(self, system):
         """

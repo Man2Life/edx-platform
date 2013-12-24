@@ -249,7 +249,7 @@ def instructor_dashboard(request, course_id):
         datatable = get_student_grade_summary_data(request, course, course_id, get_grades=True, use_offline=use_offline)
         datatable['title'] = _u('Summary Grades of students enrolled in {0}').format(course_id)
         track.views.server_track(request, "dump-grades", {}, page="idashboard")
-    
+
     elif 'Dump all RAW grades' in action:
         log.debug(action)
         datatable = get_student_grade_summary_data(request, course, course_id, get_grades=True,
@@ -1180,7 +1180,7 @@ u'CPM/volimp01/2013' : u'Вводный курс',
         if enrolled_students.count() > 0:
             # just to construct the header
             gradeset = student_grades(enrolled_students[0], request, course, keep_raw_scores=False, use_offline=False)
-            
+
             cnt_enrolled = 0
             cnt_enrolled_0 = 0
             cnt_enrolled_07 = 0
@@ -1201,7 +1201,7 @@ u'CPM/volimp01/2013' : u'Вводный курс',
                     course.id, student, course, depth=None)
                 courseware_summary = grades.progress_summary(student, request, course,
                                                      field_data_cache);
-                total = 0                
+                total = 0
                 count = 0
                 for chapter in courseware_summary:
                     for section in chapter['sections']:
@@ -1234,7 +1234,7 @@ u'CPM/volimp01/2013' : u'Вводный курс',
 def UnicodeDictReader(utf8_data, **kwargs):
     csv_reader = csv.DictReader(utf8_data, **kwargs)
     for row in csv_reader:
-        yield dict([(key, unicode(value, 'utf-8')) for key, value in row.iteritems()])  
+        yield dict([(key, unicode(value, 'utf-8')) for key, value in row.iteritems()])
 
 def fullstat(request):
     coursemap = {
@@ -1294,7 +1294,7 @@ u'CPM/volimp01/2013' : u'Вводный курс',
 
     for course_id, course_name in coursemap.iteritems():
         datarow = []
-        
+
         datarow += [u'']
         datarow += [u'']
         datarow += [u'']
@@ -1307,7 +1307,7 @@ u'CPM/volimp01/2013' : u'Вводный курс',
         datarow += [u'']
 
         assignments = []
-        
+
         enrolled_students = User.objects.filter(
             courseenrollment__course_id=course_id,
         ).prefetch_related("groups").order_by('username')
@@ -1321,7 +1321,7 @@ u'CPM/volimp01/2013' : u'Вводный курс',
 
 
         assignments += [score.section for score in gradeset['raw_scores']]
-        
+
         for chapter in courseware_summary:
             for section in chapter['sections']:
                 if not section['graded'] or len(section['format']) < 1:
@@ -1331,7 +1331,7 @@ u'CPM/volimp01/2013' : u'Вводный курс',
 
         datarow += assignments
 
-        
+
     f = open("/opt/data.csv")
 
     if f is None:
@@ -1385,21 +1385,21 @@ u'CPM/volimp01/2013' : u'Вводный курс',
             datarow += [u'Нет']
             data.append(datarow)
             continue
-        
+
         #Raw statistic by problems
         gradeset = student_grades(user, request, course, keep_raw_scores=True, use_offline=False)
         statprob = [(getattr(score, 'earned', '') or score[0]) for score in gradeset['raw_scores']]
-        
+
         #By subsection
         statsec = []
         category_weights = {}
 
         for section in gradeset['grade_breakdown']:
-            category_weights[section['category']] = section['weight']    
+            category_weights[section['category']] = section['weight']
 
         field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
                 course_id, user, course, depth=None)
-            
+
         courseware_summary = grades.progress_summary(user, request, course,
                                              field_data_cache);
         complition = 0
@@ -1420,7 +1420,7 @@ u'CPM/volimp01/2013' : u'Вводный курс',
             datarow += u"Да"
         else:
             datarow += u"Нет"
-        
+
         if complition_cnt > 0.99:
             datarow += u"Да"
         else:
@@ -1428,7 +1428,7 @@ u'CPM/volimp01/2013' : u'Вводный курс',
 
         datarow += statprob
         datarow += statsec
-        
+
         data.append(datarow)
     datatable['data'] = data
     return return_csv('full_stat.csv',datatable, open("/var/www/fullstat.csv", "w"))
@@ -1504,8 +1504,27 @@ def get_student_grade_summary_data(request, course, course_id, get_grades=True, 
             log.debug('student={0}, gradeset={1}'.format(student, gradeset))
             if get_raw_scores:
                 gradeset = student_grades(student, request, course, keep_raw_scores=get_raw_scores, use_offline=use_offline)
-                # TODO (ichuang) encode Score as dict instead of as list, so score[0] -> score['earned']
-                sgrades = [(getattr(score, 'earned', '') or score[0]) for score in gradeset['raw_scores']]
+                sgrades = []
+                for score in gradeset['raw_scores']:
+                    #if student have point then write it
+                    if score.earned:
+                        sgrades+=[score.earned/score.possible]
+                    #if he hasn't any point, may be it's CombainedOpenEndedProblem?
+                    elif score.instance_state:
+                        info = score.instance_state['task_states'][-1]
+                        info = json.loads(info)
+                        HUMAN_NAMES = {
+                                        'initial': 'Not started',
+                                        'assessing': 'In progress',
+                                        'post_assessment': 'Done',
+                                        'done': 'Done',
+                        }
+                        sgrades += [HUMAN_NAMES[info['child_state']]]
+                    #else it's a usuall problem without any point, and we want to look zero point's in this way
+                    else:
+                        sgrades += [0]
+
+
             elif course.new_progress:
                 sgrades = []
                 for chapter in courseware_summary:
