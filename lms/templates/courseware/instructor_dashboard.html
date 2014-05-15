@@ -506,7 +506,7 @@ function goto( mode)
 ##-----------------------------------------------------------------------------
 
 %if modeflag.get('Manage Groups'):
-  %if instructor_access:
+  %if instructor_access or teacher_role:
     <hr width="40%" style="align:left">
     <p>
     <input type="submit" name="action" onclick="this.value='List beta testers'" value="${_("List beta testers")}">
